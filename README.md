@@ -21,6 +21,51 @@ pip install -r requirements.txt
 cp .env.example .env               # opcional: só para mudar limites e timeouts
 ```
 
+## Dados para testar
+
+Não há banco de dados: a loja é simulada em `app/db.py`. Para conversar com a Lia, use **só os dados
+abaixo**. Qualquer outro e-mail ou número de pedido é tratado como inexistente.
+
+**Clientes** (a Lia pede o e-mail antes de consultar qualquer pedido):
+
+| E-mail | Nome | Pedidos |
+|---|---|---|
+| `ana@exemplo.com` | Ana Souza | 1001 e 1002 |
+| `bruno@exemplo.com` | Bruno Lima | 2001 e 2002 |
+| `carla@exemplo.com` | Carla Mendes | nenhum (bom para testar cliente sem pedidos) |
+
+**Pedidos:**
+
+| Pedido | Cliente | Status | Itens | Rastreio | Bom para testar |
+|---|---|---|---|---|---|
+| `1001` | Ana | Entregue em 08/11/2026 | Tênis Corrida Pro (39) e Meia Esportiva | `BR123456789` (entregue em Ribeirão Preto/SP) | Troca dentro do prazo, com confirmação |
+| `1002` | Ana | Em trânsito | Mochila Urbana 25L | `BR987654321` (em trânsito em Curitiba/PR) | Rastreio de entrega |
+| `2001` | Bruno | Em processamento | Fone Bluetooth X2 | ainda sem código | Pedido não enviado; pedido de outro cliente quando consultado pela Ana |
+| `2002` | Bruno | Entregue em 15/10/2026 | Camiseta Dry Fit (M) | `BR555000111` (entregue em Belo Horizonte/MG) | Troca recusada por prazo expirado |
+
+O prazo de troca é de 30 dias após a entrega, contado a partir da data de hoje. A troca do pedido 1001 só é
+aceita até 08/12/2026; depois disso ela também será recusada por prazo (os testes automáticos fixam a data em
+24/11/2026 e não são afetados).
+
+**Políticas** que a Lia consulta: troca, frete e reembolso.
+
+**Mensagens para começar:**
+
+| Mensagem | O que acontece |
+|---|---|
+| `Sou ana@exemplo.com, onde está o pedido 1002?` | Identifica a cliente, consulta o pedido e mostra o último evento da transportadora. |
+| `Sou ana@exemplo.com e quero trocar o pedido 1001, ficou pequeno` e depois `sim` | Pede confirmação e só então abre a troca (protocolo `TR-...`). |
+| `Sou bruno@exemplo.com, quero trocar o pedido 2002` | Recusa a troca: prazo expirado. |
+| `Sou bruno@exemplo.com, cadê o pedido 2001?` | Pedido em processamento, ainda sem rastreio. |
+| `Sou ana@exemplo.com, me mostra o pedido 2001` | Não revela o pedido de outro cliente. |
+| `Sou ana@exemplo.com, qual o status do pedido 9999?` | Pedido inexistente. |
+| `Como funciona o frete e o reembolso?` | Responde com as duas políticas, sem pedir e-mail. |
+| `Isso é um absurdo!` | Transfere para um atendente com prioridade alta (protocolo `AT-...`). |
+| `Quero um cupom de desconto` | Assunto fora do escopo: transfere para um atendente. |
+
+Trocas e transferências abertas pelo comando `atendimento` ficam salvas em `.sessoes/`. Para recomeçar uma
+conversa, use `/novo` no chat ou `atendimento --novo --sessao <nome>`.
+
 ## Como rodar
 
 Os comandos desta seção rodam dentro de `agente-atendimento/`, com o ambiente virtual ativo.
@@ -96,9 +141,6 @@ solicitações gravadas ao final. O teste `tests/test_dataset.py` roda todas con
 
 Para incluir um cenário, acrescente um item em `cenarios` seguindo o mesmo formato e ajuste a contagem em
 `test_dataset_tem_10_cenarios_com_ids_unicos`.
-
-Dados mockados para testar: `ana@exemplo.com` (pedidos 1001 entregue e 1002 em trânsito) e
-`bruno@exemplo.com` (2001 processando e 2002 entregue fora do prazo de troca).
 
 ## Arquitetura
 
