@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Inicia o atendimento da Lia sem precisar instalar o pacote.
+#   ./atendimento                              -> chat interativo
+#   ./atendimento "mensagem" --sessao maria    -> uma mensagem (modo script)
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY="python3"
+[ -x "$DIR/.venv/bin/python" ] && PY="$DIR/.venv/bin/python"
+cd "$DIR"
+exec "$PY" "$DIR/cli.py" "$@"
