@@ -9,7 +9,7 @@ do Brasil, construído com **tool use**. A Lia responde sobre pedidos, entregas,
 frete, reembolso) chamando funções Python, em vez de inventar informações.
 
 Todo o código fica em `agente-atendimento/`. A documentação detalhada para humanos está em
-`agente-atendimento/README.md`.
+`README.md` (na raiz).
 
 ## Stack
 
