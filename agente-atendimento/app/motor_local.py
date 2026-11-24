@@ -243,7 +243,7 @@ def decidir(messages: list[dict[str, Any]]) -> Resposta:
         intencao = validas[-1] if validas else Intencao("identificar")
 
     if intencao.tipo == "humano":
-        return _fluxo_humano(conv, intencao.prioridade, "Cliente pediu para falar com um atendente.")
+        return _fluxo_humano(conv, intencao.prioridade, _motivo_transferencia(conv, intencao.prioridade))
     if intencao.tipo == "fora_escopo":
         return _fluxo_humano(conv, "normal", "Assunto fora do escopo do atendimento automático.")
     if intencao.tipo == "politica":
@@ -397,6 +397,17 @@ def _contexto_caso(conv: Conversa) -> list[str]:
             else:
                 fatos[("troca", pid)] = f"Troca do pedido {pid} recusada: {_frase(_erro(r))}"
     return partes + list(fatos.values())
+
+
+def _motivo_transferencia(conv: Conversa, prioridade: str) -> str:
+    """Primeira frase do resumo: por que o atendimento foi transferido."""
+    if prioridade != "alta":
+        return "Cliente pediu para falar com um atendente."
+    motivo = "Cliente demonstrou forte insatisfação; atendimento prioritário."
+    recentes = [normalizar(t) for _, t in conv.textos_cliente[-4:]]
+    if any(_tem(n, *HUMANO) for n in recentes):
+        motivo += " Também pediu para falar com um atendente."
+    return motivo
 
 
 def _fluxo_humano(conv: Conversa, prioridade: str, motivo: str) -> Resposta:

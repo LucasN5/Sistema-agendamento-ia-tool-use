@@ -69,3 +69,23 @@ def test_motor_nao_inventa_quando_cliente_nao_existe():
 
 def test_provedor_padrao_e_local():
     assert criar_provedor().nome == "local"
+
+
+@pytest.mark.parametrize("msg, prioridade, contem, nao_contem", [
+    ("Isso é um absurdo! Meu pedido 1002 não chega nunca", "alta",
+     ["forte insatisfação"], ["pediu para falar"]),
+    ("Que palhaçada, quero falar com um gerente agora", "alta",
+     ["forte insatisfação", "Também pediu para falar com um atendente"], []),
+    ("Quero falar com um atendente", "normal",
+     ["Cliente pediu para falar com um atendente"], ["insatisfação"]),
+])
+def test_resumo_da_transferencia_explica_o_motivo(msg, prioridade, contem, nao_contem):
+    from app import db
+
+    AgenteAtendimento().responder(msg)
+    (transf,) = db.SOLICITACOES.values()
+    assert transf["prioridade"] == prioridade
+    for trecho in contem:
+        assert trecho in transf["resumo"]
+    for trecho in nao_contem:
+        assert trecho not in transf["resumo"]
