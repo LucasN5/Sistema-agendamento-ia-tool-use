@@ -59,7 +59,7 @@ uvicorn app.api:app --reload             # API em localhost:8000
 LOG_LEVEL=INFO ./atendimento             # logs por turno no stderr
 ```
 
-Estado verificado em 2026-11-24: `pytest` → 80 passed.
+Estado verificado em 2026-11-24: `pytest` → 82 passed.
 
 Dados de teste: `ana@exemplo.com` (pedidos 1001 entregue, 1002 em trânsito) e `bruno@exemplo.com`
 (2001 processando, 2002 entregue fora do prazo de troca). Os testes fixam a data em 2026-11-24

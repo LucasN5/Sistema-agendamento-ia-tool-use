@@ -149,6 +149,13 @@ class Conversa:
                 return e.resultado
         return self.cliente_nota
 
+    def email_cliente(self) -> str | None:
+        """E-mail com que o cliente da sessão foi identificado (None se ainda não foi ou se veio da nota)."""
+        for e in reversed(self.eventos):
+            if e.nome == "buscar_cliente" and "cliente_id" in e.resultado:
+                return str(e.entrada.get("email", "")).strip().lower() or None
+        return None
+
     def troca_pendente(self) -> dict[str, Any] | None:
         """Entrada da última troca que ficou aguardando confirmação antes deste turno."""
         anteriores = [e for e in self.eventos if e.nome == "abrir_solicitacao_troca" and e.indice < self.inicio_turno]
@@ -235,6 +242,10 @@ def decidir(messages: list[dict[str, Any]]) -> Resposta:
     if pendente and conv.do_turno("abrir_solicitacao_troca"):
         return _fluxo_troca(conv, pendente.get("pedido_id"), pendente.get("motivo", ""), confirmando=True)
 
+    # Troca de conta no meio da conversa: não busca o novo e-mail (nem confirma se ele existe).
+    if troca := _troca_de_conta(conv):
+        return troca
+
     intencao = classificar(msg)
     if intencao is None:  # só dados (e-mail ou número): continua o assunto anterior
         anteriores = [classificar(t) for _, t in conv.textos_cliente[-4:-1]]
@@ -279,6 +290,21 @@ def decidir(messages: list[dict[str, Any]]) -> Resposta:
                       extrair_motivo(msg))
         return _fluxo_troca(conv, pedido_id, motivo, confirmando=False, cliente_id=cliente["cliente_id"])
     return _fluxo_pedido(conv, pedido_id, cliente["cliente_id"], rastrear=intencao.tipo == "rastrear")
+
+
+def _troca_de_conta(conv: Conversa) -> Resposta | None:
+    """Recusa outro e-mail depois que a sessão já está vinculada a um cliente."""
+    cliente, atual = conv.cliente(), conv.email_cliente()
+    if not cliente or not atual or conv.do_turno("buscar_cliente"):
+        return None
+    novos = {e.lower() for e in RE_EMAIL.findall(conv.atual)} - {atual}
+    if not novos:
+        return None
+    nome = cliente["nome"].split()[0]
+    return resposta(texto(f"Este atendimento já está vinculado ao cadastro de {nome}, então não consigo trocar "
+                          "de conta no meio da conversa. Se o pedido é de outra conta, o titular dela precisa "
+                          f"iniciar um novo atendimento com o próprio e-mail. Posso ajudar com algo do cadastro "
+                          f"de {nome}?"))
 
 
 def _identificar(conv: Conversa, tipo: str) -> tuple[dict[str, Any] | None, Resposta | None]:

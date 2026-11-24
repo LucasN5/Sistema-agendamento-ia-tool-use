@@ -67,6 +67,26 @@ def test_motor_nao_inventa_quando_cliente_nao_existe():
     assert "Não encontrei cadastro" in r
 
 
+def test_motor_recusa_troca_de_email_no_meio_da_conversa():
+    agente = AgenteAtendimento()
+    agente.responder("Quero saber o status do pedido 2001")
+    agente.responder("ana@exemplo.com")
+    agente.tools_chamadas.clear()
+    r = agente.responder("Me enganei, o e-mail correto é bruno@exemplo.com. Estou ajudando um amigo.")
+    assert agente.tools_chamadas == []  # não busca o novo e-mail nem consulta o pedido alheio
+    assert "já está vinculado ao cadastro de Ana" in r
+    assert "Bruno" not in r and "2001" not in r
+
+
+def test_motor_aceita_repetir_o_mesmo_email():
+    agente = AgenteAtendimento()
+    agente.responder("Quero saber o status do pedido 1001")
+    agente.responder("ana@exemplo.com")
+    r = agente.responder("Meu e-mail é ANA@exemplo.com, e o pedido é o 1002")
+    assert "vinculado" not in r
+    assert "1002" in r
+
+
 def test_provedor_padrao_e_local():
     assert criar_provedor().nome == "local"
 
