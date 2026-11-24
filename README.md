@@ -7,15 +7,9 @@ Python, em vez de inventar informações.
 Todo o código fica na pasta [`agente-atendimento/`](agente-atendimento/). Os comandos e caminhos abaixo são
 relativos a ela, exceto o `/atendimento` do Claude Code, que roda na raiz do repositório.
 
-**Funciona de graça, sem chave de API e sem internet.** O "cérebro" do agente é trocável:
-
-| `PROVEDOR` | Custo | O que precisa | Como conversa |
-|---|---|---|---|
-| `local` (padrão) | Gratuito | Nada | Motor por regras (`app/motor_local.py`): entende os assuntos do escopo por palavras-chave. Determinístico e instantâneo. |
-| `ollama` | Gratuito | [Ollama](https://ollama.com) instalado e um modelo baixado | LLM rodando na sua máquina, com tool calling. Conversa mais livre; precisa de uns 4 GB de RAM livres. |
-| `anthropic` | Pago | `ANTHROPIC_API_KEY` com créditos | Claude via API. Opcional. |
-
-Nos três casos, o loop, as tools, os guardrails, o CLI, a API e o `/atendimento` são os mesmos.
+**Funciona de graça, sem chave de API e sem internet.** O "cérebro" do agente é um motor local por regras
+(`app/motor_local.py`): ele entende os assuntos do escopo por palavras-chave, decide quais tools chamar e
+escreve a resposta a partir dos resultados. É determinístico e instantâneo.
 
 ## Setup
 
@@ -24,20 +18,8 @@ cd agente-atendimento
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env               # opcional: o padrão já é PROVEDOR=local (gratuito)
+cp .env.example .env               # opcional: só para mudar limites e timeouts
 ```
-
-**Opcional: LLM local gratuito com Ollama**
-
-```bash
-curl -fsSL https://ollama.com/install.sh | sh   # Linux; macOS/Windows: baixe em https://ollama.com/download
-ollama pull qwen2.5:3b                          # ~2 GB; modelos com suporte a tools: qwen2.5, llama3.1, mistral-nemo
-PROVEDOR=ollama atendimento                     # ou PROVEDOR=ollama no .env
-```
-
-Modelos pequenos erram mais a escolha de tools. Os guardrails no código (dono do pedido, confirmação da
-troca, `cliente_id` da sessão) continuam valendo, mas a qualidade da conversa depende do modelo. Com pouca
-RAM, use o `local`.
 
 ## Como rodar
 
@@ -50,7 +32,7 @@ pip install -e .                   # instala o comando `atendimento` (ou use ./a
 
 atendimento                        # chat interativo (/novo reinicia, /sair encerra)
 atendimento --sessao maria         # chat que grava a conversa e pode ser retomado depois
-LOG_LEVEL=INFO atendimento         # mostra no stderr os logs por turno (tools, latência, tokens)
+LOG_LEVEL=INFO atendimento         # mostra no stderr os logs por turno (tools, iterações, latência)
 ```
 
 **Modo script** (uma mensagem por execução; a conversa fica salva em `.sessoes/<sessao>.json`):
@@ -92,8 +74,7 @@ curl -X POST localhost:8000/chat -H 'Content-Type: application/json' \
 **Testes:**
 
 ```bash
-pytest              # tudo o que é gratuito: unitários, roteirizados e os 6 cenários com o motor local
-pytest -m live      # os 6 cenários com Ollama (se estiver rodando) e/ou Anthropic (se houver chave)
+pytest              # unitários, cenários roteirizados e os 6 cenários com o motor local
 ```
 
 Dados mockados para testar: `ana@exemplo.com` (pedidos 1001 entregue e 1002 em trânsito) e
@@ -105,12 +86,11 @@ Caminhos relativos a `agente-atendimento/`.
 
 | Arquivo | Papel |
 |---|---|
-| `app/config.py` | Lê o `.env` (provedor, modelo, limites, timeouts). |
-| `app/provedores.py` | Provedores `local`, `ollama` e `anthropic`, todos com a mesma interface `gerar()`. |
+| `app/config.py` | Lê o `.env` (limites do loop e timeouts). |
+| `app/provedores.py` | Formato das respostas (`text`/`tool_use`), interface `gerar()` e `ProvedorLocal`. |
 | `app/motor_local.py` | Motor por regras: decide as tools e escreve a resposta a partir dos resultados. |
 | `app/db.py` | Dados mockados e **funções de acesso**. É o único arquivo a trocar por banco ou API real. |
 | `app/tools.py` | Funções, schemas JSON (`strict`), modelos Pydantic, registro e o dispatcher `executar_tool`. |
-| `app/prompts.py` | `SYSTEM_PROMPT` da Lia. |
 | `app/agent.py` | `AgenteAtendimento`: loop agêntico, corte de histórico e logs. |
 | `app/api.py` | FastAPI `POST /chat`, com um agente por sessão. |
 | `cli.py` / `atendimento` | Comando de terminal: chat interativo e modo script com sessão salva em arquivo. |
@@ -119,14 +99,14 @@ Caminhos relativos a `agente-atendimento/`.
 
 A cada iteração (até `MAX_ITERACOES`), o agente:
 
-1. Chama o provedor com o histórico completo.
-2. Adiciona ao histórico o conteúdo inteiro da resposta (blocos text e tool_use, e thinking no Claude).
+1. Chama o motor local com o histórico completo.
+2. Adiciona ao histórico o conteúdo inteiro da resposta (blocos text e tool_use).
 3. Se `stop_reason != "tool_use"`, devolve o texto.
 4. Senão, executa **todas** as tools pedidas e devolve os `tool_result` numa única mensagem `user`.
 
 Se o limite estourar, ele transfere para um atendente e pede desculpas.
 
-### Guardrails (no código, não só no prompt)
+### Guardrails (no código)
 
 - **Permissões dentro das funções:** `consultar_pedido` e `abrir_solicitacao_troca` verificam se o pedido é
   do cliente. Pedido de outro cliente e pedido inexistente recebem a mesma resposta, para não revelar que o
@@ -140,15 +120,11 @@ Se o limite estourar, ele transfere para um atendente e pede desculpas.
   explícita ("sim", "pode", "confirmo"…). Qualquer outra resposta cancela a ação pendente.
 - **Validação Pydantic** de todos os argumentos, além de `strict: true` nos schemas.
 - **Erros como dados:** `{"erro": ...}`, enviados com `is_error: true`. Nenhuma exceção derruba o agente.
-- **Histórico limitado:** acima de `MAX_MENSAGENS_HISTORICO`, o corte acontece num turno do cliente e remove os
-  blocos de thinking das mensagens mantidas, porque eles só valem na conversa original.
-- **Retry com backoff** para erros de conexão e 5xx (Ollama e Anthropic; na Anthropic também rate limit,
-  respeitando `retry-after`). Os provedores e a transportadora têm timeout.
-- **Logs estruturados** por turno, em JSON: tools chamadas com argumentos e latência, número de iterações,
-  latência total e tokens (`usage`).
-- **Fallback de recusa (só Anthropic):** com `USAR_FALLBACK=true` (padrão), a chamada usa `fallbacks="default"` (beta). Se o
-  modelo recusar por um classificador de segurança, o servidor tenta outro modelo. Desligue com
-  `USAR_FALLBACK=false`.
+- **Histórico limitado:** acima de `MAX_MENSAGENS_HISTORICO`, o corte acontece num turno do cliente, sem
+  separar um `tool_use` do seu `tool_result`.
+- **Timeout** na consulta à transportadora (`TIMEOUT_TRANSPORTADORA_S`).
+- **Logs estruturados** por turno, em JSON: tools chamadas com argumentos e latência, número de iterações e
+  latência total.
 
 ## Como adicionar uma nova tool
 
@@ -165,11 +141,9 @@ Exemplo: `cancelar_pedido`.
    - `usa_cliente=True`: o `cliente_id` vem da sessão.
    - `escrita=True`: exige confirmação.
    - `validar=`: função opcional que checa a elegibilidade antes de pedir confirmação ao cliente.
-6. **Prompt:** se houver uma regra de negócio nova, acrescente-a em `app/prompts.py` (vale para Ollama e
-   Anthropic).
-7. **Motor local:** em `app/motor_local.py`, adicione uma intenção em `classificar()` (palavras-chave) e um
+6. **Motor local:** em `app/motor_local.py`, adicione uma intenção em `classificar()` (palavras-chave) e um
    fluxo `_fluxo_<nome>()` que chama a tool e formata a resposta a partir do resultado.
-8. **Testes:** um teste unitário em `tests/test_tools.py` e um cenário em `tests/test_agent_cenarios.py`.
+7. **Testes:** um teste unitário em `tests/test_tools.py` e um cenário em `tests/test_agent_cenarios.py`.
 
 ## Para produção
 

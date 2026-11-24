@@ -22,4 +22,4 @@ Argumentos recebidos: `$ARGUMENTS`
 
    Rode a partir da raiz do repositório. Mostre `Lia: <resposta>` exatamente como veio no campo `resposta`, sem resumir nem reescrever. Se o campo `tools` não estiver vazio, acrescente uma linha discreta: `(ferramentas: nome1, nome2)`.
 
-Por padrão a Lia usa o motor local gratuito (`PROVEDOR=local`), que não precisa de chave nem de internet. Se o comando falhar, mostre o erro em uma frase. Se a Lia responder "instabilidade", o provedor configurado em `agente-atendimento/.env` não está acessível: o Ollama pode estar parado, ou falta `ANTHROPIC_API_KEY`. Sugira voltar para `PROVEDOR=local`.
+A Lia usa um motor local gratuito, que não precisa de chave nem de internet. Se o comando falhar, mostre o erro em uma frase.

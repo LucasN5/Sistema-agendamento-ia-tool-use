@@ -1,37 +1,33 @@
 """Cenários de conversa: verificam QUAIS tools foram chamadas e em que ORDEM, não o texto exato.
 
 Duas camadas:
-- `TestCenariosRoteirizados`: o modelo é substituído por respostas roteirizadas. Testa o loop
-  agêntico e os guardrails do código de forma determinística (roda sempre, sem custo).
-- `TestCenariosProvedor`: as mesmas conversas com um "modelo" de verdade. O motor local
-  (gratuito) roda sempre. Ollama roda se estiver acessível em OLLAMA_URL. Anthropic roda só
-  com ANTHROPIC_API_KEY definida (custa tokens).
+- `TestCenariosRoteirizados`: o motor é substituído por respostas roteirizadas, inclusive
+  respostas "erradas" que o motor local nunca daria. Testa o loop agêntico e os guardrails
+  do código de forma determinística.
+- `TestCenariosMotorLocal`: as mesmas conversas com o motor local de verdade.
 """
 
 from __future__ import annotations
 
 import dataclasses
-import os
-import urllib.request
 
-import anthropic
 import pytest
 
 from app import db
 from app.agent import MSG_LIMITE_ITERACOES, AgenteAtendimento
 from app.config import config
-from app.provedores import ProvedorAnthropic, ProvedorLocal, ProvedorOllama
-from conftest import ClienteFalso, resposta, texto, tool
+from app.provedores import ProvedorLocal
+from conftest import ProvedorRoteirizado, resposta, texto, tool
 
 
 def nomes(agente: AgenteAtendimento) -> list[str]:
     return [n for n, _ in agente.tools_chamadas]
 
 
-def agente_falso(*roteiro, **cfg_override) -> tuple[AgenteAtendimento, ClienteFalso]:
-    cliente = ClienteFalso(list(roteiro))
+def agente_falso(*roteiro, **cfg_override) -> tuple[AgenteAtendimento, ProvedorRoteirizado]:
+    provedor = ProvedorRoteirizado(list(roteiro))
     cfg = dataclasses.replace(config, **cfg_override) if cfg_override else config
-    return AgenteAtendimento(client=cliente, cfg=cfg), cliente
+    return AgenteAtendimento(provedor=provedor, cfg=cfg), provedor
 
 
 # ====================================================================== roteirizados
@@ -147,34 +143,6 @@ class TestCenariosRoteirizados:
         assert any(s["tipo"] == "transferencia" for s in db.SOLICITACOES.values())
         assert agente.historico[-1]["role"] == "assistant"
 
-    def test_retry_em_rate_limit(self, monkeypatch):
-        import httpx2
-
-        monkeypatch.setattr("app.provedores.time.sleep", lambda s: None)
-        erro = anthropic.RateLimitError(
-            "rate limit",
-            response=httpx2.Response(429, headers={"retry-after": "1"}, request=httpx2.Request("POST", "https://x")),
-            body=None,
-        )
-        agente, cliente = agente_falso(resposta(texto("Oi!")))
-        original = cliente._create
-        falhas = iter([erro, erro])
-
-        def com_falha(**p):
-            e = next(falhas, None)
-            if e:
-                raise e
-            return original(**p)
-
-        cliente.beta.messages.create = com_falha
-        assert agente.responder("Oi") == "Oi!"
-
-    def test_fallback_desligado_usa_messages_create(self):
-        agente, cliente = agente_falso(resposta(texto("Oi")), usar_fallback=False)
-        cliente.beta.messages.create = None  # se for usado, quebra
-        assert agente.responder("Oi") == "Oi"
-        assert "betas" not in cliente.chamadas[0]
-
     def test_historico_e_cortado_em_turno_do_cliente(self):
         roteiro = []
         for _ in range(6):
@@ -189,38 +157,15 @@ class TestCenariosRoteirizados:
         assert "C001" in primeira["content"]
 
 
-# ====================================================================== provedores reais
+# ====================================================================== motor local
 
 
-def _ollama_ativo() -> bool:
-    try:
-        with urllib.request.urlopen(config.ollama_url.rstrip("/") + "/api/tags", timeout=1) as r:
-            return r.status == 200
-    except OSError:
-        return False
+@pytest.fixture
+def novo_agente():
+    return lambda: AgenteAtendimento(provedor=ProvedorLocal())
 
 
-PROVEDORES = [
-    pytest.param("local", id="local"),
-    pytest.param("ollama", id="ollama", marks=[
-        pytest.mark.live, pytest.mark.skipif(not _ollama_ativo(), reason="Ollama não está rodando")]),
-    pytest.param("anthropic", id="anthropic", marks=[
-        pytest.mark.live, pytest.mark.skipif(not os.getenv("ANTHROPIC_API_KEY"), reason="sem ANTHROPIC_API_KEY")]),
-]
-
-
-@pytest.fixture(params=PROVEDORES)
-def novo_agente(request):
-    def criar() -> AgenteAtendimento:
-        if request.param == "local":
-            return AgenteAtendimento(provedor=ProvedorLocal())
-        if request.param == "ollama":
-            return AgenteAtendimento(provedor=ProvedorOllama(config))
-        return AgenteAtendimento(provedor=ProvedorAnthropic(config))
-    return criar
-
-
-class TestCenariosProvedor:
+class TestCenariosMotorLocal:
     def test_1_sem_email_pede_email(self, novo_agente):
         agente = novo_agente()
         r = agente.responder("Oi, qual o status do meu pedido 1001?")

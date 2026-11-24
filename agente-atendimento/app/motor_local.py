@@ -1,11 +1,11 @@
-"""Motor local por regras: faz o papel do LLM sem custo, sem chave e sem internet.
+"""Motor local por regras: decide quais tools chamar e formata a resposta, sem custo, sem chave e sem internet.
 
-Ele recebe o histórico (no formato da Messages API) e devolve a próxima resposta:
+Ele recebe o histórico (mensagens com blocos `text`, `tool_use` e `tool_result`) e devolve a próxima resposta:
 uma ou mais chamadas de tool, ou o texto final. Como o motor só decide e formata,
 toda informação continua vindo das tools, e os guardrails do dispatcher valem igual.
 
 Limitações: entende só os assuntos do escopo (pedido, rastreio, troca, políticas,
-atendente humano) por palavras-chave. Para conversa livre, use PROVEDOR=ollama.
+atendente humano) por palavras-chave.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Fixtures compartilhadas: estado do mock zerado, data fixa e cliente Anthropic falso."""
+"""Fixtures compartilhadas: estado do mock zerado, data fixa e provedor roteirizado."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def estado_limpo(monkeypatch: pytest.MonkeyPatch):
     db.PEDIDOS.update(pedidos)
 
 
-# ---------------------------------------------------------------- cliente falso
+# ---------------------------------------------------------------- provedor roteirizado
 
 
 def texto(t: str) -> SimpleNamespace:
@@ -48,21 +48,20 @@ def tool(nome: str, **entrada: Any) -> SimpleNamespace:
 
 def resposta(*blocos: SimpleNamespace) -> SimpleNamespace:
     stop = "tool_use" if any(b.type == "tool_use" for b in blocos) else "end_turn"
-    uso = SimpleNamespace(input_tokens=100, output_tokens=20, cache_read_input_tokens=0)
-    return SimpleNamespace(content=list(blocos), stop_reason=stop, usage=uso)
+    return SimpleNamespace(content=list(blocos), stop_reason=stop)
 
 
-class ClienteFalso:
-    """Imita `client.messages.create` / `client.beta.messages.create` devolvendo respostas roteirizadas."""
+class ProvedorRoteirizado:
+    """Substitui o motor local devolvendo respostas roteirizadas e registrando cada chamada."""
+
+    nome = "roteirizado"
 
     def __init__(self, roteiro: list[SimpleNamespace]) -> None:
         self.roteiro = list(roteiro)
         self.chamadas: list[dict[str, Any]] = []
-        self.messages = SimpleNamespace(create=self._create)
-        self.beta = SimpleNamespace(messages=SimpleNamespace(create=self._create))
 
-    def _create(self, **params: Any) -> SimpleNamespace:
-        self.chamadas.append({**params, "messages": copy.deepcopy(params["messages"])})
+    def gerar(self, messages: list[dict[str, Any]]) -> SimpleNamespace:
+        self.chamadas.append({"messages": copy.deepcopy(messages)})
         if not self.roteiro:
-            raise AssertionError("O agente chamou a API mais vezes do que o roteiro previa")
+            raise AssertionError("O agente chamou o provedor mais vezes do que o roteiro previa")
         return self.roteiro.pop(0)

@@ -9,8 +9,7 @@ import pytest
 
 import cli
 from app import db
-from app.provedores import ProvedorAnthropic
-from conftest import ClienteFalso, resposta, texto, tool
+from conftest import ProvedorRoteirizado, resposta, texto, tool
 
 
 @pytest.fixture
@@ -18,8 +17,8 @@ def ambiente(tmp_path, monkeypatch):
     """Sessões numa pasta temporária e o modelo substituído por um roteiro."""
     monkeypatch.setattr(cli, "PASTA_SESSOES", tmp_path)
     monkeypatch.setattr(cli, "ARQUIVO_DADOS", tmp_path / "_dados_mock.json")
-    falso = ClienteFalso([])
-    monkeypatch.setattr("app.agent.criar_provedor", lambda cfg: ProvedorAnthropic(cfg, falso))
+    falso = ProvedorRoteirizado([])
+    monkeypatch.setattr("app.agent.criar_provedor", lambda: falso)
     return falso, tmp_path
 
 
@@ -50,7 +49,7 @@ def test_troca_em_duas_execucoes_separadas(ambiente, capsys):
     assert r2["resposta"] == "Troca aberta: TR-000001."
     assert list(db.SOLICITACOES) == ["TR-000001"]
 
-    # O histórico restaurado foi enviado à API como dicts JSON, mantendo o tool_use_id certo.
+    # O histórico restaurado foi enviado ao provedor como dicts JSON, mantendo o tool_use_id certo.
     msgs = falso.chamadas[-1]["messages"]
     assert msgs[0]["content"] == "Sou ana@exemplo.com, quero trocar o pedido 1001"
     assert isinstance(msgs[1]["content"][0], dict)  # veio do arquivo
@@ -86,10 +85,9 @@ def test_nome_de_sessao_invalido(ambiente):
 
 
 def test_modo_script_gratuito_com_motor_local(tmp_path, monkeypatch, capsys):
-    """Fluxo completo sem chave nem custo: duas execuções separadas, motor local."""
+    """Fluxo completo com o motor local: duas execuções separadas."""
     monkeypatch.setattr(cli, "PASTA_SESSOES", tmp_path)
     monkeypatch.setattr(cli, "ARQUIVO_DADOS", tmp_path / "_dados_mock.json")
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
     r1 = rodar(capsys, "Sou ana@exemplo.com e quero trocar o pedido 1001, ficou pequeno", "-s", "g", "--json")
     assert "Confirma" in r1["resposta"]

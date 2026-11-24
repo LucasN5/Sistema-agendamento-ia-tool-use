@@ -5,9 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agente-atendimento"
 version = "0.1.0"
-description = "Lia: agente de atendimento ao cliente com tool use (Anthropic)"
+description = "Lia: agente de atendimento ao cliente com tool use e motor local por regras"
 requires-python = ">=3.10"
-dependencies = ["anthropic>=2.13", "python-dotenv>=1.0", "pydantic>=2.7", "fastapi>=0.115", "uvicorn>=0.30"]
+dependencies = ["python-dotenv>=1.0", "pydantic>=2.7", "fastapi>=0.115", "uvicorn>=0.30"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
