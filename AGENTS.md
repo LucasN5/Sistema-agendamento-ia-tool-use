@@ -33,6 +33,7 @@ Configuração opcional em `agente-atendimento/.env` (modelo em `.env.example`; 
 | `app/agent.py` | `AgenteAtendimento`: loop agêntico, corte de histórico, logs JSON, exportar/restaurar estado. |
 | `app/api.py` | FastAPI: `POST /chat` (`sessao_id`, `mensagem`) e `GET /health`; sessões em dicionário em memória. |
 | `cli.py` / `atendimento` | Comando de terminal: chat interativo ou modo script; sessões salvas em `.sessoes/<sessao>.json`. |
+| `dataset/cenarios.json` | 10 cenários de atendimento (irritado, pedido inexistente, fraudes, trocas, escopo) com expectativas por turno; rodados por `tests/test_dataset.py`. |
 | `tests/` | Unitários de tools, motor local e CLI; cenários roteirizados (`ProvedorRoteirizado` em `conftest.py`) e 6 cenários ponta a ponta com o motor local. |
 
 Tools disponíveis: `buscar_cliente`, `consultar_pedido`, `rastrear_entrega`, `buscar_politica`,
@@ -58,7 +59,7 @@ uvicorn app.api:app --reload             # API em localhost:8000
 LOG_LEVEL=INFO ./atendimento             # logs por turno no stderr
 ```
 
-Estado verificado em 2026-11-24: `pytest` → 65 passed.
+Estado verificado em 2026-11-24: `pytest` → 77 passed.
 
 Dados de teste: `ana@exemplo.com` (pedidos 1001 entregue, 1002 em trânsito) e `bruno@exemplo.com`
 (2001 processando, 2002 entregue fora do prazo de troca). Os testes fixam a data em 2026-11-24
@@ -91,7 +92,7 @@ Os guardrails vivem **no código**. Ao mexer em tools ou no loop, preserve:
    checar elegibilidade antes de pedir confirmação).
 6. Motor local: intenção em `classificar()` e um `_fluxo_<nome>()` em `app/motor_local.py`
    (sem isso o agente nunca chama a tool).
-7. Testes: unitário em `tests/test_tools.py` e cenário em `tests/test_agent_cenarios.py`.
+7. Testes: unitário em `tests/test_tools.py`, cenário em `tests/test_agent_cenarios.py` e, se for um caso de atendimento novo, um item em `dataset/cenarios.json`.
 
 ## Convenções
 
